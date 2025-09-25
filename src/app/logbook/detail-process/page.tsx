@@ -1,108 +1,122 @@
 "use client";
-import { useSearchParams } from "next/navigation";
-import { procesos } from "@/constants/tableData";
+import React, { useState, useEffect } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
+import { getSessionInfo, fetchProcessRunDetails, fetchStepExecutionDetails } from "@/constants/api";
 import { Calendar, Clock, User } from "lucide-react";
 import styles from "@/styles/DetailProcess.module.css";
 import UnitField from "@/components/UnitField2";
 import HeaderXuchil from "@/components/HeaderXuchil";
-import { getSessionInfo } from "@/constants/api";
+import type { ProcessRunDetails, StepExecutionDetails } from "@/types/Logbook";
 
-const { isAdminMode, currentUser } = getSessionInfo();
+const { isAdminMode } = getSessionInfo();
 
 const DetailProcess = () => {
   const searchParams = useSearchParams();
-  const id = searchParams.get("id");
-  const actividadParam = searchParams.get("actividad");
+  const router = useRouter();
+  const processRunId = searchParams.get("id");
+  const stepExecutionId = searchParams.get("stepId");
 
-  const proceso = procesos.find((p) => p.id === id);
-  if (!proceso) return <p>Proceso no encontrado</p>;
+  const [details, setDetails] = useState<ProcessRunDetails | StepExecutionDetails | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const actividad = !isAdminMode
-    ? proceso.actividades.find(
-        (a) => a.tarea === actividadParam && a.usuario === currentUser
-      )
-    : null;
+  useEffect(() => {
+    const fetchDetails = async () => {
+      try {
+        if (isAdminMode && processRunId) {
+          const data = await fetchProcessRunDetails(processRunId);
+          setDetails(data);
+        } else if (!isAdminMode && stepExecutionId) {
+          const data = await fetchStepExecutionDetails(stepExecutionId);
+          setDetails(data);
+        } else {
+          // Redirigir o mostrar error si faltan parámetros
+          router.push("/logbook");
+        }
+      } catch (error) {
+        console.error("Error fetching details:", error);
+        setDetails(null);
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-  if (!isAdminMode && !actividad) return <p>Actividad no encontrada</p>;
+    fetchDetails(); 
+  }, [processRunId, stepExecutionId, router]);
+
+  if (isLoading) return <p>Cargando detalles...</p>;
+  if (!details) return <p>No se encontraron los detalles del proceso o actividad.</p>;
 
   return (
     <div className={styles.container}>
       <HeaderXuchil />
-      <h1 className={styles.title}>Producto: {proceso.producto}</h1>
+      <h1 className={styles.title}>Producto: {details.productName}</h1>
+      {isAdminMode && 'batchCode' in details && (
 
-      {isAdminMode && (
         <>
-          <h3 className={styles.processId}>Proceso no. <span>{proceso.id}</span></h3>
+          <h3 className={styles.processId}>Lote no. <span>{details.batchCode}</span></h3>
 
           <div className={styles.dateRange}>
             <Calendar size={18} />
-            <span>{proceso.fechaInicio} - {proceso.fechaFin}</span>
+            <span>{new Date(details.startedAt).toLocaleDateString()} - {new Date(details.finishedAt).toLocaleDateString()}</span>
           </div>
 
           <div className={styles.timelineContainer}>
             <ul className={styles.timeline}>
-              {proceso.actividades.map((a, index) => (
+              {details.steps.map((step, index) => (
                 <li key={index}>
                   <div className={styles.dot}></div>
                   <div>
                     <strong>
-                      {a.tarea} <User size={16} style={{ marginLeft: 6 }} />
+                      {step.name} <User size={16} style={{ marginLeft: 6 }} />
                     </strong>
                     <div className={styles.dateTime}>
-                      <span>{a.fecha}</span>
-                      <span>{a.horaInicio} - {a.horaFin}</span>
+                      <span>{step.startedAt} - {step.finishedAt}</span>
                     </div>
-                    <p className={styles.responsible}>Responsable: {a.usuario}</p>
+                    <p className={styles.responsible}>Responsable: {step.worker}</p>
                   </div>
                 </li>
               ))}
             </ul>
           </div>
 
-          <UnitField titulo="Materia prima" cantidad={proceso.materiaPrimaKg} unidad="Kg" />
-          <UnitField titulo="Producto" cantidad={proceso.productoKg} unidad="Kg" />
-          <UnitField titulo="Merma" cantidad={proceso.mermaKg} unidad="Kg" />
+          <UnitField titulo="Producto Terminado" cantidad={details.goodOutputQty} unidad={details.outputUnit} />
+          <UnitField titulo="Merma" cantidad={details.scrapQty} unidad={details.outputUnit} />
 
           <div className={styles.observations}>
             <h4>Observaciones</h4>
             <div className={styles.noteCard}>
-              <p>{proceso.observaciones}</p>
+              <p>{details.notes || 'Sin observaciones.'}</p>
             </div>
           </div>
         </>
       )}
 
-      {!isAdminMode && actividad && (
-  <>
-    <h2 className={styles.activityTitle}>Actividad: {actividad.tarea}</h2>
+      {!isAdminMode && 'taskName' in details && (
+        <>
+          <h2 className={styles.activityTitle}>Actividad: {details.taskName}</h2>
+ 
 
-    <div className={styles.infoRow}>
-      <User size={18} />
-      <span>{actividad.usuario}</span>
-    </div>
-
-    <div className={styles.infoRow}>
-      <Calendar size={18} />
-      <span>{actividad.fecha}</span>
-    </div>
-
-    <div className={styles.infoRow}>
-      <Clock size={18} />
-      <span>{actividad.horaInicio} - {actividad.horaFin}</span>
-    </div>
-
-    <div className={styles.unitFieldWrapper}>
-      <UnitField titulo="Producto" cantidad={proceso.productoKg} unidad="Kg" />
-    </div>
-
-    <div className={styles.observations}>
-      <h4>Observaciones</h4>
-      <div className={styles.noteCard}>
-        <p>{proceso.observaciones}</p>
+      <div className={styles.infoRow}>
+        <Calendar size={18} />
+        <span>{new Date(details.finishedAt).toLocaleDateString()}</span>
       </div>
-    </div>
-  </>
-)}
+
+      <div className={styles.infoRow}>
+        <Clock size={18} />
+        <span>{new Date(details.startedAt).toLocaleTimeString()} - {new Date(details.finishedAt).toLocaleTimeString()}</span>
+      </div>
+
+      <div className={styles.unitFieldWrapper}>
+          {details.inputQty && <UnitField titulo="Materia Prima Usada" cantidad={details.inputQty} unidad={details.inputUnit} />}
+      </div>
+      <div className={styles.observations}>
+        <h4>Observaciones de la Tarea</h4>
+        <div className={styles.noteCard}>
+          <p>{details.notes || 'Sin observaciones.'}</p>
+        </div>
+      </div>
+    </>
+  )}
 
     </div>
   );

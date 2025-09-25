@@ -1,8 +1,69 @@
-import { ProcessStep } from "@/types/ProcessStep";
+import type {
+  AdminLogbookEntry,
+  ProcessRunDetails,
+  UserLogbookEntry,
+  StepExecutionDetails,
+  LogbookFilters
+} from "@/types/Logbook";
 import { ProductVariant } from "@/types/ProductVariant";
 import { PendingTask } from "@/types/PendingTask";
 import { Order } from "@/types/Order";
 import { Product } from "@/types/Product";
+
+export const fetchAdminLogbook = async (filters: LogbookFilters): Promise<AdminLogbookEntry[]> => {
+  console.log("Fetching admin logbook with filters:", filters);
+  return [
+    { processRunId: 'LOTE-001', batchCode: 'LOTE-001', product: 'Harina de Mezquite', worker: 'Antonio López', finishedAt: '2025-09-20', status: 'COMPLETED' },
+    { processRunId: 'LOTE-002', batchCode: 'LOTE-002', product: 'Sustituto de Café', worker: 'Zoraida Jiménez', finishedAt: '2025-09-21', status: 'COMPLETED' },
+  ];
+};
+
+export const fetchWorkerLogbook = async (filters: LogbookFilters): Promise<UserLogbookEntry[]> => {
+  console.log("Fetching worker logbook with filters:", filters);
+  return [
+    { stepExecutionId: 'step-123', processRunId: 'LOTE-001', taskName: 'Molienda', finishedAt: '2025-09-20' },
+    { stepExecutionId: 'step-124', processRunId: 'LOTE-001', taskName: 'Tamizado', finishedAt: '2025-09-20' },
+  ];
+};
+
+export const fetchProcessRunDetails = async (processRunId: string): Promise<ProcessRunDetails> => {
+  console.log("Fetching details for process run:", processRunId);
+  return {
+    id: processRunId,
+    batchCode: 'LOTE-001',
+    productName: 'Harina de Mezquite',
+    startedAt: '2025-09-20T08:00:00Z',
+    finishedAt: '2025-09-20T17:00:00Z',
+    goodOutputQty: 18.5,
+    scrapQty: 1.5,
+    outputUnit: 'Kg',
+    notes: 'El proceso se completó sin inconvenientes. La materia prima tenía buena calidad.',
+    steps: [
+      { name: 'Recepción de materia prima', worker: 'Antonio López', startedAt: '08:00', finishedAt: '08:30', status: 'DONE' },
+      { name: 'Lavado', worker: 'Zoraida Jiménez', startedAt: '08:30', finishedAt: '09:30', status: 'DONE' },
+      { name: 'Secado', worker: 'Antonio López', startedAt: '09:30', finishedAt: '11:00', status: 'DONE' },
+      { name: 'Molienda', worker: 'Antonio López', startedAt: '11:00', finishedAt: '13:00', status: 'DONE' },
+      { name: 'Tamizado', worker: 'Zoraida Jiménez', startedAt: '13:00', finishedAt: '15:00', status: 'DONE' },
+      { name: 'Envasado', worker: 'Antonio López', startedAt: '15:00', finishedAt: '17:00', status: 'DONE' },
+    ]
+  };
+};
+
+export const fetchStepExecutionDetails = async (stepExecutionId: string): Promise<StepExecutionDetails> => {
+  console.log("Fetching details for step execution:", stepExecutionId);
+  return {
+    id: stepExecutionId,
+    processRunId: 'LOTE-001',
+    taskName: 'Molienda',
+    productName: 'Harina de Mezquite',
+    worker: 'Antonio López',
+    startedAt: '2025-09-20T11:00:00Z',
+    finishedAt: '2025-09-20T13:00:00Z',
+    notes: 'El molino funcionó correctamente.',
+    inputQty: 20,
+    inputUnit: 'Kg'
+  };
+};
 
 export interface SessionInfo {
   isAdminMode: boolean;

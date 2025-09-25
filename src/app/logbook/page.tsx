@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import DynamicTable from "@/components/DynamicTable";
 import FilterButton from "@/components/FilterButton";
 import {
@@ -8,56 +8,76 @@ import {
   productFilterOptions,
   userFilterOptions,
 } from "@/constants/filterOptions";
-import {
-  userTaskColumns,
-  procesos,
-} from "@/constants/tableData";
-import { getSessionInfo } from "@/constants/api";
+import { getSessionInfo, fetchAdminLogbook, fetchWorkerLogbook } from "@/constants/api";
 import styles from "./LogbookPage.module.css";
+import type { AdminLogbookEntry, UserLogbookEntry } from "@/types/Logbook";
 
 const { isAdminMode, currentUser } = getSessionInfo();
+
+const adminColumns = [
+  { key: "batchCode", label: "Lote" },
+  { key: "product",   label: "Producto" },
+  { key: "worker",    label: "Responsable" },
+  { key: "finishedAt",label: "Fecha" },
+  { key: "status",    label: "Estado" },
+  { key: "details",   label: "Detalles", isButton: true },
+];
+
+const workerColumns = [
+  { key: "taskName",   label: "Tarea" },
+  { key: "finishedAt", label: "Fecha" },
+  { key: "details",    label: "Detalles", isButton: true },
+];
+
 
 const Logbook = () => {
   const [selectedProduct, setSelectedProduct] = useState(productFilterOptions[0]);
   const [selectedUser, setSelectedUser]   = useState(userFilterOptions[0]);
   const [selectedMonth, setSelectedMonth] = useState(monthFilterOptions[0]);
 
-  const filteredTasks = useMemo(() => {
-    return procesos.flatMap((proceso) => {
-      const matchProducto =
-        selectedProduct.label === "Todos" ||
-        proceso.producto.toLowerCase().includes(selectedProduct.label.toLowerCase());
+  const [tasks, setTasks] = useState<Array<AdminLogbookEntry | UserLogbookEntry>>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-      if (!matchProducto) return [];
+  useEffect(() => {
+    const loadLogbookData = async () => {
+      setIsLoading(true);
+      const filters = {
+        productId: selectedProduct.value,
+        workerId: selectedUser.value,
+        month: selectedMonth.value,
+      };
 
-      return proceso.actividades
-        .filter((actividad) => {
-          const matchUsuario = isAdminMode
-            ? selectedUser.label === "Todos" || actividad.usuario === selectedUser.label
-            : actividad.usuario === currentUser;
+      try {
+        if (isAdminMode) {
+          const data = await fetchAdminLogbook(filters);
+          setTasks(data);
+        } else {
+          const data = await fetchWorkerLogbook(filters);
+          setTasks(data);
+        }
+      } catch (error) {
+        console.error("Error fetching logbook data:", error);
+        setTasks([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-          const matchMes =
-            selectedMonth.label === "Cualquiera" ||
-            new Date(actividad.fecha)
-              .toLocaleString("es-MX", { month: "long" })
-              .toLowerCase() === selectedMonth.label.toLowerCase();
-
-          return matchUsuario && matchMes;
-        })
-        .map((actividad) => ({
-          tarea: actividad.tarea,
-          fecha: actividad.fecha,
-          usuario: actividad.usuario,
-          detalles: { text: "Ver", idProceso: proceso.id },
-        }));
-    });
-  }, [selectedProduct, selectedUser, selectedMonth]);
-
-  const userColumns = [
-    { key: "tarea",    label: "Tarea" },
-    { key: "fecha",    label: "Fecha" },
-    { key: "detalles", label: "Detalles", isButton: true },
-  ];
+    loadLogbookData();
+  }, [selectedProduct, selectedUser, selectedMonth])
+  const tableData = tasks.map((task) => {
+    if ("batchCode" in task) {
+      return {
+        ...task,
+        details: { text: "Ver", idProceso: task.processRunId },
+      };
+    } else {
+      return {
+        ...task,
+        details: { text: "Ver", idProceso: task.processRunId, stepId: task.stepExecutionId },
+      };
+    }
+  });
 
   return (
     <>
@@ -91,13 +111,17 @@ const Logbook = () => {
         </div>
       </div>
 
-      <div className={styles.tableWrapper}>
-        <DynamicTable
-          columns={isAdminMode ? userTaskColumns : userColumns}
-          data={filteredTasks}
-          isAdminMode={isAdminMode}
-        />
-      </div>
+        <div className={styles.tableWrapper}>
+        {isLoading ? (
+          <p>Cargando bitácora...</p>
+        ) : (
+          <DynamicTable
+            columns={isAdminMode ? adminColumns : workerColumns}
+            data={tableData}
+            isAdminMode={isAdminMode}
+          />
+        )}
+        </div>
     </>
   );
 };
