@@ -34,7 +34,7 @@ export async function POST(req: Request, { params }: { params: { stepId: string,
         }
         await prisma.stepExecution.update({
           where: { id: stepExecutionId },
-          data: { status: StepStatus.BLOCKED }, // Use BLOCKED to represent paused state
+          data: { status: StepStatus.BLOCKED }, // BLOCKED = paused
         });
         await prisma.processPause.create({
           data: { processRunId: stepExecution.processRunId, startedAt: now },
@@ -56,7 +56,7 @@ export async function POST(req: Request, { params }: { params: { stepId: string,
         return NextResponse.json({ message: `Step ${stepId} resumed` });
 
       case "finish":
-        if (stepExecution.status !== StepStatus.IN_PROGRESS && stepExecution.status !== StepStatus.BLOCKED) { // Check for BLOCKED instead of PAUSED
+        if (stepExecution.status !== StepStatus.IN_PROGRESS && stepExecution.status !== StepStatus.BLOCKED) { 
           return NextResponse.json({ error: "Step cannot be finished" }, { status: 400 });
         }
         await prisma.stepExecution.update({

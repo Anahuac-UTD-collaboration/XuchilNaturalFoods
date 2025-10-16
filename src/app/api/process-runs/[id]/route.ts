@@ -6,8 +6,6 @@ import {ProcessRun} from "@prisma/client";
 
 export async function GET(request: NextRequest, {params}: { params: Promise<{ id: string }> }) {
 	const rawId = (await params).id;
-
-	// decide whether the param is numeric id or batchCode (non-numeric)
 	const numericId = Number(rawId);
 	const whereClause = Number.isFinite(numericId) && !Number.isNaN(numericId)
 		? { id: numericId }
@@ -38,14 +36,13 @@ export async function GET(request: NextRequest, {params}: { params: Promise<{ id
 			return NextResponse.json({ error: 'ProcessRun not found' }, { status: 404 });
 		}
 
-		// Serialize Decimal and Date fields to JSON-friendly primitives
+		// Use shared serialize function for consistency
 		function serialize(obj: any): any {
 			if (obj === null || obj === undefined) return obj;
 			if (Array.isArray(obj)) return obj.map(serialize);
 			if (typeof obj === 'object') {
 				const out: any = {};
 				for (const [k, v] of Object.entries(obj)) {
-					// Decimal.js instances from Prisma have toString()
 					if (v && typeof v === 'object' && typeof v.toString === 'function' && v.constructor && v.constructor.name === 'Decimal') {
 						out[k] = v.toString();
 						continue;
@@ -61,11 +58,8 @@ export async function GET(request: NextRequest, {params}: { params: Promise<{ id
 			return obj;
 		}
 
-		const payload = serialize(processRun);
-
-		return NextResponse.json(payload, { status: 200 });
+		return NextResponse.json(serialize(processRun), { status: 200 });
 	} catch (err: any) {
-		// Log server-side if you have a logger (here we just return error info)
 		return NextResponse.json({ error: err?.message ?? String(err) }, { status: 500 });
 	}
 

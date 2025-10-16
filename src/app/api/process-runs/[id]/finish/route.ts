@@ -69,7 +69,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
 		let inventoryLot: any = null;
 		if (goodOutputQty !== undefined && goodOutputQty !== null && Number(goodOutputQty) > 0) {
-			// create a lot for the produced output
 			inventoryLot = await prisma.inventoryLot.create({
 				data: {
 					inventoryItemId: inventoryItem.id,
@@ -80,7 +79,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 				}
 			});
 
-			// Create inventory movement IN for the lot
 			const movementUnitId = finalUnitId ?? inventoryItem.defaultUnitId ?? run.plannedUnitId;
 			if (!movementUnitId) throw new Error('No unitId available for inventory movement. Provide outputUnitId or ensure inventory item or run has a default/planned unit.');
 
@@ -98,7 +96,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 			});
 		}
 
-		// Update the processRun with final quantities and status
 		const updated = await prisma.processRun.update({
 			where: { id: runId },
 			data: {

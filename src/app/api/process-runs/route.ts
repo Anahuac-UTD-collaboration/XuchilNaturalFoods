@@ -45,46 +45,45 @@ export async function POST(request: NextRequest) {
 
 	const { productVariantId, processTemplateId, batchCode, plannedQty, plannedUnitId, createdByWorkerId, notes } = body;
 
-	// Basic validation
-	if (!productVariantId || !processTemplateId || !batchCode) {
-		return NextResponse.json({ error: 'productVariantId, processTemplateId and batchCode are required' }, { status: 400 });
-	}
-
-	// Ensure batchCode is unique (Prisma will also enforce unique constraint)
-	const existing = await prisma.processRun.findUnique({ where: { batchCode } });
-	if (existing) {
-		return NextResponse.json({ error: 'batchCode already exists' }, { status: 409 });
-	}
-
-	try {
-		const createData: any = {
-			productVariantId,
-			processTemplateId,
-			batchCode,
-			notes: notes ?? null,
-		};
-
-		if (plannedQty !== undefined) {
-			// store as string to feed Prisma Decimal
-			createData.plannedQty = typeof plannedQty === 'number' ? plannedQty.toString() : plannedQty;
+		// Basic validation
+		if (!productVariantId || !processTemplateId || !batchCode) {
+			return NextResponse.json({ error: 'productVariantId, processTemplateId and batchCode are required' }, { status: 400 });
 		}
-		if (plannedUnitId) createData.plannedUnitId = plannedUnitId;
-		if (createdByWorkerId) createData.createdByWorkerId = createdByWorkerId;
 
-		const run = await prisma.processRun.create({
-			data: createData,
-			include: {
-				productVariant: { select: { id: true, name: true } },
-				processTemplate: { select: { id: true, name: true, version: true } },
-				creator: { select: { id: true, fullName: true } },
-				plannedUnit: { select: { id: true, name: true } },
-				outputUnit: { select: { id: true, name: true } },
+		// Ensure batchCode is unique (Prisma will also enforce unique constraint)
+		const existing = await prisma.processRun.findUnique({ where: { batchCode } });
+		if (existing) {
+			return NextResponse.json({ error: 'batchCode already exists' }, { status: 409 });
+		}
+
+		try {
+			const createData: any = {
+				productVariantId,
+				processTemplateId,
+				batchCode,
+				notes: notes ?? null,
+			};
+
+			if (plannedQty !== undefined) {
+				createData.plannedQty = typeof plannedQty === 'number' ? plannedQty.toString() : plannedQty;
 			}
-		});
+			if (plannedUnitId) createData.plannedUnitId = plannedUnitId;
+			if (createdByWorkerId) createData.createdByWorkerId = createdByWorkerId;
 
-		return NextResponse.json(serialize(run), { status: 201 });
-	} catch (err: any) {
-		return NextResponse.json({ error: err?.message ?? String(err) }, { status: 500 });
-	}
+			const run = await prisma.processRun.create({
+				data: createData,
+				include: {
+					productVariant: { select: { id: true, name: true } },
+					processTemplate: { select: { id: true, name: true, version: true } },
+					creator: { select: { id: true, fullName: true } },
+					plannedUnit: { select: { id: true, name: true } },
+					outputUnit: { select: { id: true, name: true } },
+				}
+			});
+
+			return NextResponse.json(serialize(run), { status: 201 });
+		} catch (err: any) {
+			return NextResponse.json({ error: err?.message ?? String(err) }, { status: 500 });
+		}
 }
 
