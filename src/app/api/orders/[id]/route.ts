@@ -1,11 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db";
+import { orderSchema } from "@/lib/schemas";
+import { z } from "zod";
+import {checkId} from "@/utils/responses";
 
 export async function GET(req: NextRequest, context: { params: Promise<{ id: string }> }) {
-  const { id } = await context.params;
+  const [orderId, orderIdError] = checkId('order', (await context.params).id);
+  if (orderIdError !== null) {
+    return orderIdError;
+  }
   try {
     const order = await prisma.order.findUnique({
-      where: { id: Number(id) },
+      where: { id: orderId },
       include: {
         orderItems: {
           include: { productVariant: true, unit: true },
@@ -24,36 +30,80 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
   }
 }
 
-export async function PUT(req: NextRequest, context: { params: Promise<{ id: string }> }) {
+export async function PUT(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const [orderId, orderIdError] = checkId('order', (await context.params).id);
+  if (orderIdError !== null) {
+    return orderIdError;
+  }
+
+  let body: unknown;
   try {
-    const { id } = await context.params;
-    const body = await req.json();
-    const { clientName, addressText, deliveryDate, deliveryVariant, status } = body;
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
 
-    const order = await prisma.order.update({
-      where: { id: Number(id) },
-      data: {
-        clientName,
-        addressText,
-        deliveryDate: new Date(deliveryDate),
-        deliveryVariant,
-        status,
-      },
-    });
+  const result = orderSchema.safeParse(body);
 
-    return NextResponse.json(order);
+  if (!result.success) {
+    const formattedErr = z.flattenError(result.error);
+    return NextResponse.json(
+      { error: "Invalid request body", details: formattedErr },
+      { status: 400 }
+    );
+  }
+
+  try {
+    const existingOrder = await prisma.order.findUnique({ where: { id: orderId } });
+    if (!existingOrder) {
+        return NextResponse.json({ error: "Order not found" }, { status: 404 });
+    }
+    const validBody = result.data;
+    const transaction = await prisma.$transaction([
+      // Delete all existing items for this order
+      prisma.orderItem.deleteMany({
+        where: { orderId: orderId },
+      }),
+
+      prisma.order.update({
+        where: { id: orderId },
+        data: {
+          clientName: validBody.clientName,
+          addressText: validBody.addressText,
+          deliveryDate: validBody.deliveryDate,
+          deliveryVariant: validBody.deliveryVariant,
+          status: validBody.status,
+          deliveredAt: validBody.deliveredAt,
+          consignmentPartner: validBody.consignmentPartner,
+          notes: validBody.notes,
+          orderItems: {
+            createMany: {
+              data: validBody.orderItems.map(item => ({
+                productVariantId: item.productVariantId,
+                quantity: item.quantity,
+                unitId: item.unitId,
+                notes: item.notes,
+              })),
+            },
+          },
+        },
+        include: { orderItems: true },
+      }),
+    ]);
+    return NextResponse.json(transaction[1]);
   } catch (error) {
-    console.error("Error updating order:", error);
     return NextResponse.json({ error: "Failed to update order" }, { status: 500 });
   }
 }
 
 export async function DELETE(req: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const [orderId, orderIdError] = checkId('order', (await context.params).id);
+  if (orderIdError !== null) {
+    return orderIdError;
+  }
   try {
-    const { id } = await context.params;
-
     await prisma.order.update({
-      where: { id: Number(id) },
+      where: { id: orderId },
       data: { status: "CANCELLED" },
     });
 
